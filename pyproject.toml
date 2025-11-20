@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "impactmesh"
+version = "0.1.0"
+description = "ImpactMesh package for mesh-based impact analysis"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Benedikt Blumenstiel", email = "benedikt.blumenstiel@ibm.com" },
+    { name = "Paul Höhn", email = "paul.hoehn@dlr.com" }
+]
+requires-python = ">=3.8"
+dependencies = [
+    "terratorch>=1.1.1",
+    "zarr==2.18.0",
+    "numcodecs==0.15.1",
+]
+
+[tool.setuptools]
+packages = ["impactmesh"]

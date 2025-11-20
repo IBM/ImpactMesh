@@ -1,0 +1,123 @@
+# lightning.pytorch==2.1.1
+seed_everything: 42
+trainer:
+  accelerator: auto
+  strategy: auto
+  devices: auto
+  num_nodes: 1
+  precision: 16-mixed
+#  logger: true # Set to logger: true for Tensorboard
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: ImpactMesh-Flood
+      name: TerraMind-Tiny_lr1e-4
+      config:
+        modalities: S1-S2-DEM
+        dataset: IM-Flood
+
+  callbacks:
+    - class_path: RichProgressBar
+    - class_path: LearningRateMonitor
+      init_args:
+        logging_interval: epoch
+    - class_path: EarlyStopping
+      init_args:
+        monitor: val/loss
+        patience: 10
+    - class_path: ModelCheckpoint
+      init_args:
+        monitor: val/loss
+        mode: min
+        save_weights_only: true
+        dirpath: output/terramind_tiny_impactmesh_flood/1e-4
+        filename: best_val_loss
+  max_epochs: 50
+  log_every_n_steps: 5
+  default_root_dir: output/terramind_tiny_impactmesh_flood/
+data:
+  class_path: impactmesh.impactmesh_datamodule.ImpactMeshDataModule
+  init_args:
+    batch_size: 16
+    num_workers: 8
+    data_root: data/ImpactMesh-Flood/data
+    train_split: data/ImpactMesh-Flood/split/impactmesh_flood_train.txt
+    val_split: data/ImpactMesh-Flood/split/impactmesh_flood_val.txt
+    test_split: data/ImpactMesh-Flood/split/impactmesh_flood_test.txt
+    timesteps: [0, 1, 2, 3]
+    modalities:
+        - S2L2A
+        - S1RTC
+        - DEM
+    no_data_replace: 0
+    train_transform:
+      - class_path: terratorch.datasets.transforms.FlattenTemporalIntoChannels
+      - class_path: albumentations.D4
+      - class_path: albumentations.pytorch.ToTensorV2
+      - class_path: terratorch.datasets.transforms.UnflattenTemporalFromChannels
+        init_args:
+          n_timesteps: 4
+# Use pretraining stats with frozen encoder
+#    means:
+#      S2L2A: [ 1390.458, 1503.317, 1718.197, 1853.91, 2199.1, 2779.975, 2987.011, 3083.234, 3132.22, 3162.988, 2424.884, 1857.648 ]
+#      S1RTC: [ -10.93, -17.329 ]
+#      DEM: [ 670.665 ]
+#    stds:
+#      S2L2A: [ 2106.761, 2141.107, 2038.973, 2134.138, 2085.321, 1889.926, 1820.257, 1871.918, 1753.829, 1797.379, 1434.261, 1334.311 ]
+#      S1RTC: [ 4.391, 4.459 ]
+#      DEM: [ 951.272 ]
+
+model:
+  class_path: terratorch.tasks.SemanticSegmentationTask
+  init_args:
+    model_factory: EncoderDecoderFactory
+    model_args:
+      backbone: terramind_v1_tiny
+      backbone_pretrained: true
+      backbone_modalities:
+        - S2L2A
+        - S1RTC
+        - DEM
+
+      # Apply temporal wrapper (docs: https://terrastackai.github.io/terratorch/stable/guide/temporal_wrapper/)
+      backbone_use_temporal: true
+      backbone_temporal_pooling: concat
+      backbone_temporal_n_timestamps: 4
+
+      necks:
+        - name: SelectIndices
+          indices: [2, 5, 8, 11]  # indices for terramind_v1_tiny, small, and base
+#          indices: [5, 11, 17, 23]  # large version
+        - name: ReshapeTokensToImage
+          remove_cls_token: False
+        - name: LearnedInterpolateToPyramidal
+
+      decoder: UNetDecoder
+      decoder_channels: [256, 128, 64, 32] # tiny
+#      decoder_channels: [512, 256, 128, 64] # base
+
+      head_dropout: 0.1
+      num_classes: 2
+    loss: dice
+    ignore_index: -1
+    freeze_backbone: false
+    freeze_decoder: false
+    class_weights: [0.342, 1.316]
+    # For prediction: overlap of 16 pixel on each side, 8 pixels dropped
+    tiled_inference_parameters:
+      crop: 256
+      stride: 208
+      batch_size: 64
+      delta: 8
+
+optimizer:
+  class_path: torch.optim.AdamW
+  init_args:
+    lr: 1.e-4
+lr_scheduler:
+  class_path: ReduceLROnPlateau
+  init_args:
+    monitor: val/loss
+    factor: 0.5
+    patience: 2
+
