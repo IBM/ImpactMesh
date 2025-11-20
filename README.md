@@ -4,7 +4,7 @@
 
 # ImpactMesh
 
-ImpactMesh is a large-scale multimodal, multitemporal dataset for flood and wildfire mapping. 
+ImpactMesh is a large-scale multimodal, multitemporal dataset for flood and wildfire mapping, released by IBM, DLR, and the ESA Φ-lab. 
 It combines Sentinel-1 SAR, Sentinel-2 optical imagery, and Copernicus DEM with high-quality annotations from Copernicus EMS. 
 The dataset covers over 400 events globally with four temporal observations per event.
 
