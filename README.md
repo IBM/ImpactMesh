@@ -13,7 +13,11 @@ The dataset covers over 400 events globally with four temporal observations per 
 Please find the wildfire subset at https://huggingface.co/datasets/ibm-esa-geospatial/ImpactMesh-Fire and the flood samples at https://huggingface.co/datasets/ibm-esa-geospatial/ImpactMesh-FLood.
 The following map gives an overview of events present in ImpactMesh:
 
-![events_world.png](assets/events_world.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/events_world_dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="assets/events_world_light.png">
+  <img src="assets/events_world_light.png" alt="ImpactMesh events world map" width="800"/>
+</picture>
 
 This repository provides code to build the pytorch dataloader or directly fine-tune a model with [TerraTorch](https://terrastackai.github.io/terratorch/stable/).
 
