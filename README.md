@@ -33,7 +33,7 @@ Alternatively create a new environment and install TerraTorch and the package fr
 python -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
-pip install git+https://github.com/terrastackai/terratorch.git@multimodal
+pip install terratorch==1.2.1
 pip install zarr==2.18.0 numcodecs==0.15.1
 pip install -e .
 ```

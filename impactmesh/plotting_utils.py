@@ -17,7 +17,7 @@ def rgb_smooth_quantiles(array, tolerance=0.02, scaling=0.5, default=2000):
     """
 
     # Get scaling thresholds for smoothing the brightness
-    limit_low, median, limit_high = np.quantile(array, q=[tolerance, 0.5, 1. - tolerance])
+    limit_low, median, limit_high = np.nanquantile(array, q=[tolerance, 0.5, 1. - tolerance])
     limit_high = limit_high.clip(default)  # Scale only pixels above default value
     limit_low = limit_low.clip(0, 1000)  # Scale only pixels below 1000
     limit_low = np.where(median > default / 2, limit_low, 0)  # Make image only darker if it is not dark already
@@ -27,7 +27,7 @@ def rgb_smooth_quantiles(array, tolerance=0.02, scaling=0.5, default=2000):
     array = np.where(array <= limit_high, array, limit_high + (array - limit_high) * scaling)
 
     # Update scaling params using a 10th of the tolerance for max value
-    limit_low, limit_high = np.quantile(array, q=[tolerance/10, 1. - tolerance/10])
+    limit_low, limit_high = np.nanquantile(array, q=[tolerance/10, 1. - tolerance/10])
     limit_high = limit_high.clip(default, 20000)  # Scale only pixels above default value
     limit_low = limit_low.clip(0, 500)  # Scale only pixels below 500
     limit_low = np.where(median > default / 2, limit_low, 0)  # Make image only darker if it is not dark already
