@@ -1,4 +1,4 @@
-
+import os.path
 
 import torch
 import tqdm
@@ -49,7 +49,8 @@ print(f"Saving output to {output_dir}")
 
 for batch in tqdm.tqdm(data_loader):
     filename = batch["filename"][0]
-    out_file_name = output_dir / (filename + "_prediction.tif")
+    print(filename)
+    out_file_name = output_dir / (os.path.basename(filename).rsplit('_DEM.tif')[0] + "_prediction.tif")
     if not args.overwrite and out_file_name.exists():
         print(f"Skipping {out_file_name} ...")
 
@@ -70,8 +71,8 @@ for batch in tqdm.tqdm(data_loader):
     pred = pred.squeeze(0).argmax(dim=0).cpu().numpy()
 
     # Save image
-    input_file_name = tif_dir / (filename + "_DEM.tif")
-    mask, metadata = open_tiff(input_file_name)
+    print(out_file_name)
+    mask, metadata = open_tiff(filename)
     if args.verbose:
         print(f"Saving output to {out_file_name}")
     write_tiff(pred, out_file_name, metadata)
