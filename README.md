@@ -49,12 +49,12 @@ terratorch fit --config configs/terramind_v1_tiny_impactmesh_fire.yaml
 
 Run the evaluation on the test split.
 ```shell
-terratorch test --config configs/terramind_v1_tiny_impactmesh_fire.yaml -- ckpt output/terramind_tiny_impactmesh_fire/1e-4/best_val_loss.ckpt
+terratorch test --config configs/terramind_v1_tiny_impactmesh_fire.yaml --ckpt output/terramind_tiny_impactmesh_fire/1e-4/best_val_loss.ckpt
 ```
 
-Run prediction with the following command:
-```shell
-terratorch predict -c configs/terramind_v1_tiny_impactmesh_fire.yaml --ckpt path/to/ckeckpoint.pt --predict_output_dir output/impactmesh_fire_predictions
+Run prediction with the following commands. The `predict_data_root` is expected to have `modalities` as subfolders with tif/zarr.zip files similar to ImpactMesh. Add `--predict_split <split>.txt` with sample prefixes if you only want to predict a subset in `predict_data_root`. Note that `terratorch predict` requires `DEM` input, use `run_inference.py` as an alternative if you don't use `DEM` inputs.  
+```shell 
+terratorch predict -c configs/terramind_v1_tiny_impactmesh_fire.yaml --ckpt path/to/ckeckpoint.pt --predict_output_dir output/impactmesh_fire_predictions --data.init_args.predict_data_root data/fire_inputs
 
 # TerraTorch automatically uses a tiled inference. It might still lead to OOM errors. In that case, you can use:
 python impactmesh/run_inference.py -c configs/terramind_v1_tiny_impactmesh_fire.yaml --ckpt path/to/ckeckpoint.pt --output_dir output/impactmesh_fire_predictions

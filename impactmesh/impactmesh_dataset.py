@@ -152,7 +152,10 @@ class ImpactMeshDataset(NonGeoDataset):
 
         if "mask" in output:
             output['mask'] = output['mask'].long()
-        output['filename'] = patch_id
+
+        if "DEM" in self.modalities:
+            # TerraTorch expects a tif file as input to copy the metadata. Only works with DEM
+            output['filename'] = str(self.data_root["DEM"] / f"{patch_id}{self.image_grep['DEM']}")
 
         return output
 
