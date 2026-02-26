@@ -29,6 +29,7 @@ elif torch.mps.is_available():
 else:
     device = 'cpu'
 
+task.model.eval()
 task.model.to(device)
 
 task.datamodule.batch_size = 1
