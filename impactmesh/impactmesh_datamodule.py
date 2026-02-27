@@ -1,4 +1,3 @@
-
 import logging
 import albumentations as A
 import numpy as np
@@ -6,29 +5,90 @@ from pathlib import Path
 from torchgeo.datamodules import NonGeoDataModule
 from .impactmesh_dataset import ImpactMeshDataset
 from terratorch.datamodules.generic_pixel_wise_data_module import Normalize
-from terratorch.datamodules.generic_multimodal_data_module import MultimodalNormalize, wrap_in_compose_is_list
+from terratorch.datamodules.generic_multimodal_data_module import (
+    MultimodalNormalize,
+    wrap_in_compose_is_list,
+)
 
-# Dataset statisitcs
-impactmesh_wildfire_means = {
-    "S2L2A": [801.325, 861.655, 991.636, 1019.702, 1366.43, 2000.191, 2255.338, 2354.884, 2481.838, 2747.908, 2185.777, 1495.209],
-    "S1RTC": [-9.838, -15.465],
-    "DEM": [412.745],
-}
-impactmesh_wildfire_stds = {
-    "S2L2A": [1960.514, 1732.936, 1494.812, 1384.473, 1385.129, 1309.367, 1322.601, 1352.448, 1336.39, 2379.374, 1145.593, 991.566],
-    "S1RTC": [3.505, 3.422],
-    "DEM": [354.58],
-}
-
-impactmesh_flood_means = {
-    "S2L2A": [1223.128, 1251.355, 1423.443, 1408.984, 1786.818, 2448.316, 2685.642, 2745.795, 2817.936, 3194.081, 1964.659, 1399.317],
-    "S1RTC": [-9.98, -15.968],
-    "DEM": [141.786],
-}
-impactmesh_flood_stds = {
-    "S2L2A": [2358.709, 2227.598, 2082.363, 2068.519, 2086.682, 2003.085, 2019.494, 2060.309, 2014.732, 2992.644, 1414.951, 1218.357],
-    "S1RTC": [4.24, 4.105],
-    "DEM": [189.363],
+datasets_stats = {
+    "fire": {
+        "means": {
+            "S2L2A": [
+                801.325,
+                861.655,
+                991.636,
+                1019.702,
+                1366.43,
+                2000.191,
+                2255.338,
+                2354.884,
+                2481.838,
+                2747.908,
+                2185.777,
+                1495.209,
+            ],
+            "S1RTC": [-9.838, -15.465],
+            "DEM": [412.745],
+        },
+        "stds": {
+            "S2L2A": [
+                1960.514,
+                1732.936,
+                1494.812,
+                1384.473,
+                1385.129,
+                1309.367,
+                1322.601,
+                1352.448,
+                1336.39,
+                2379.374,
+                1145.593,
+                991.566,
+            ],
+            "S1RTC": [3.505, 3.422],
+            "DEM": [354.58],
+        },
+        "label_grep": "_annotation_wildfire.tif",
+    },
+    "flood": {
+        "means": {
+            "S2L2A": [
+                1223.128,
+                1251.355,
+                1423.443,
+                1408.984,
+                1786.818,
+                2448.316,
+                2685.642,
+                2745.795,
+                2817.936,
+                3194.081,
+                1964.659,
+                1399.317,
+            ],
+            "S1RTC": [-9.98, -15.968],
+            "DEM": [141.786],
+        },
+        "stds": {
+            "S2L2A": [
+                2358.709,
+                2227.598,
+                2082.363,
+                2068.519,
+                2086.682,
+                2003.085,
+                2019.494,
+                2060.309,
+                2014.732,
+                2992.644,
+                1414.951,
+                1218.357,
+            ],
+            "S1RTC": [4.24, 4.105],
+            "DEM": [189.363],
+        },
+        "label_grep": "_annotation_flood.tif",
+    },
 }
 
 
@@ -56,7 +116,7 @@ class ImpactMeshDataModule(NonGeoDataModule):
         train_transform: A.Compose | None | list[A.BasicTransform] = None,
         val_transform: A.Compose | None | list[A.BasicTransform] = None,
         test_transform: A.Compose | None | list[A.BasicTransform] = None,
-        no_data_value: float = -9999.,
+        no_data_value: float = -9999.0,
         no_data_replace: float = None,
         rgb_indices: dict[str, list[int]] = None,
         **kwargs,
@@ -103,40 +163,66 @@ class ImpactMeshDataModule(NonGeoDataModule):
         if rgb_indices is not None:
             self.rgb_indices = rgb_indices
         elif concat_bands:
-            self.rgb_indices = rgb_indices or {"S2L2A": list(range(12)), "S1RTC": [-3, -2], "DEM": [-1]}
-            self.rgb_indices = {m: v for m, v in self.rgb_indices.items() if m in self.modalities}
+            self.rgb_indices = rgb_indices or {
+                "S2L2A": list(range(12)),
+                "S1RTC": [-3, -2],
+                "DEM": [-1],
+            }
+            self.rgb_indices = {
+                m: v for m, v in self.rgb_indices.items() if m in self.modalities
+            }
         else:
             self.rgb_indices = rgb_indices or {m: None for m in self.modalities}
 
-        self.image_grep = image_grep or {"S2L2A": "_S2L2A.zarr.zip", "S1RTC": "_S1RTC.zarr.zip", "DEM": "_DEM.tif"}
+        self.image_grep = image_grep or {
+            "S2L2A": "_S2L2A.zarr.zip",
+            "S1RTC": "_S1RTC.zarr.zip",
+            "DEM": "_DEM.tif",
+        }
         if label_grep is not None:
             self.label_grep = label_grep
-        elif "flood" in str(self.data_root).lower():
-            self.label_grep = "_annotation_flood.tif"
-        elif "fire" in str(self.data_root).lower():
-            self.label_grep = "_annotation_wildfire.tif"
-        else:
-            raise ValueError(f"Unknown label_grep: {label_grep}. "
-                             f"Specify a label grep or include disaster type in data root {self.data_root}.")
+
+        # The disaster type is inferred via an optional argument (disaster_type) passed via kwargs,
+        # or if the name of the disaster is in the data root path
+        disaster_type = kwargs.get("disaster_type")
+        if disaster_type not in datasets_stats.keys():
+            for k in datasets_stats.keys():
+                if k in str(self.data_root).lower():
+                    disaster_type = k
+                    break
+        if disaster_type is None:
+            raise ValueError(
+                f"Specify disaster type in data root {self.data_root} or add it as init argument (disaster_type) to the Datamodule. "
+                f"Allowed disaster types are {list(datasets_stats.keys())}"
+            )
+
+        self.label_grep = datasets_stats[disaster_type]["label_grep"]
+
         self.timesteps = timesteps or [0, 1, 2, 3]
         self.concat_bands = concat_bands
         self.no_data_value = no_data_value
         self.no_data_replace = no_data_replace if no_data_replace is not None else 0
 
-        self.train_transform = wrap_in_compose_is_list(train_transform, image_modalities=self.modalities)
-        self.val_transform = wrap_in_compose_is_list(val_transform, image_modalities=self.modalities)
-        self.test_transform = wrap_in_compose_is_list(test_transform, image_modalities=self.modalities)
+        self.train_transform = wrap_in_compose_is_list(
+            train_transform, image_modalities=self.modalities
+        )
+        self.val_transform = wrap_in_compose_is_list(
+            val_transform, image_modalities=self.modalities
+        )
+        self.test_transform = wrap_in_compose_is_list(
+            test_transform, image_modalities=self.modalities
+        )
 
-        if means is not None and stds is not None:
+        # Use stds and means from init args if available, otherwise use the default ones.
+        if all([means, stds]):
             pass
-        elif "flood" in str(self.data_root).lower():
-            means = {m: impactmesh_flood_means[m] for m in self.modalities}
-            stds = {m: impactmesh_flood_stds[m] for m in self.modalities}
-        elif "fire" in str(self.data_root).lower():
-            means = {m: impactmesh_wildfire_means[m] for m in self.modalities}
-            stds = {m: impactmesh_wildfire_stds[m] for m in self.modalities}
         else:
-            raise ValueError(f"Specify means and std or include disaster type in data root {self.data_root}")
+            means = {
+                m: datasets_stats[disaster_type]["means"][m] for m in self.modalities
+            }
+            stds = {
+                m: datasets_stats[disaster_type]["stds"][m] for m in self.modalities
+            }
 
         if self.concat_bands:
             # Concatenate mean and std values
@@ -150,7 +236,6 @@ class ImpactMeshDataModule(NonGeoDataModule):
             self.stds = {m: stds[m] for m in stds.keys()}
 
             self.aug = MultimodalNormalize(self.means, self.stds)
-
 
     def setup(self, stage: str) -> None:
         """Set up datasets.
@@ -208,7 +293,9 @@ class ImpactMeshDataModule(NonGeoDataModule):
             )
         if stage in ["predict"]:
             if self.predict_data_root is None:
-                logging.warning(f"predict_data_root is not specified, using default data_root {self.data_root}.")
+                logging.warning(
+                    f"predict_data_root is not specified, using default data_root {self.data_root}."
+                )
             self.predict_dataset = ImpactMeshDataset(
                 data_root=self.predict_data_root or self.data_root,
                 split_file=self.predict_split,
