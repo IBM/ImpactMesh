@@ -1,4 +1,3 @@
-
 import logging
 import time
 
@@ -14,6 +13,7 @@ from typing import Callable
 from torchgeo.datasets import NonGeoDataset
 from terratorch.datasets.transforms import MultimodalTransforms, MultimodalToTensor
 from .plotting_utils import plot_modality, red
+
 
 class ImpactMeshDataset(NonGeoDataset):
     """ "
@@ -31,7 +31,7 @@ class ImpactMeshDataset(NonGeoDataset):
         timesteps: list[int] = None,
         concat_bands: bool = False,
         transform=None,
-        no_data_value: float = -9999.,
+        no_data_value: float = -9999.0,
         no_data_replace: float = None,
         rgb_indices: dict[str, list[int]] = None,
         aug: Callable = None,
@@ -45,11 +45,17 @@ class ImpactMeshDataset(NonGeoDataset):
         self.data_root = {m: data_root / m for m in self.modalities}
         self.label_dir = data_root / label_dir if label_dir is not None else None
         self.timesteps = timesteps or [0, 1, 2, 3]
-        self.image_grep = image_grep or {"S2L2A": "_S2L2A.zarr.zip", "S1RTC": "_S1RTC.zarr.zip", "DEM": "_DEM.tif"}
+        self.image_grep = image_grep or {
+            "S2L2A": "_S2L2A.zarr.zip",
+            "S1RTC": "_S1RTC.zarr.zip",
+            "DEM": "_DEM.tif",
+        }
         self.label_grep = label_grep
         self.concat_bands = concat_bands
         self.no_data_value = no_data_value
-        self.no_data_replace = no_data_replace if no_data_replace is not None else np.nan
+        self.no_data_replace = (
+            no_data_replace if no_data_replace is not None else np.nan
+        )
         self.rgb_indices = rgb_indices
         self.aug = aug
 
@@ -77,7 +83,6 @@ class ImpactMeshDataset(NonGeoDataset):
         else:
             raise TypeError(f"transform must be an instance of Albumentations.Compose")
 
-
     def __len__(self):
         return len(self.samples)
 
@@ -86,7 +91,9 @@ class ImpactMeshDataset(NonGeoDataset):
         # Load data
         output = {}
         for modality in self.modalities:
-            file_path = self.data_root[modality] / f"{patch_id}{self.image_grep[modality]}"
+            file_path = (
+                self.data_root[modality] / f"{patch_id}{self.image_grep[modality]}"
+            )
             if not file_path.exists():
                 raise ValueError(f"{file_path} does not exist")
             elif str(file_path).endswith(".zarr.zip"):
@@ -104,13 +111,17 @@ class ImpactMeshDataset(NonGeoDataset):
             elif sample.ndim == 3:
                 sample = sample.reshape(1, *sample.shape)
             elif not sample.ndim == 4:
-                raise ValueError(f"Unknown sample shape {sample.shape}, expected 2D, 3D or 4D (file {file_path}).")
+                raise ValueError(
+                    f"Unknown sample shape {sample.shape}, expected 2D, 3D or 4D (file {file_path})."
+                )
 
             # Select timestamps
             if sample.shape[0] < len(self.timesteps):
                 # Repeat inputs for all timestamps
                 if sample.shape[0] != 1:
-                    raise ValueError(f"Unexpected shape {sample.shape} in file {file_path}.")
+                    raise ValueError(
+                        f"Unexpected shape {sample.shape} in file {file_path}."
+                    )
                 sample = sample.repeat(len(self.timesteps), axis=0)
             elif sample.shape[0] > len(self.timesteps):
                 # Subsample time steps
@@ -138,7 +149,7 @@ class ImpactMeshDataset(NonGeoDataset):
                 raise ValueError(f"{label_path} does not exist")
             else:
                 with rasterio.open(label_path, "r") as f:
-                    output['mask'] = f.read(1)
+                    output["mask"] = f.read(1)
 
         if self.transform:
             output = self.transform(output)
@@ -151,11 +162,13 @@ class ImpactMeshDataset(NonGeoDataset):
             output["image"] = {m: output.pop(m) for m in self.modalities}
 
         if "mask" in output:
-            output['mask'] = output['mask'].long()
+            output["mask"] = output["mask"].long()
 
         if "DEM" in self.modalities:
             # TerraTorch expects a tif file as input to copy the metadata. Only works with DEM
-            output['filename'] = str(self.data_root["DEM"] / f"{patch_id}{self.image_grep['DEM']}")
+            output["filename"] = str(
+                self.data_root["DEM"] / f"{patch_id}{self.image_grep['DEM']}"
+            )
 
         return output
 
@@ -172,12 +185,16 @@ class ImpactMeshDataset(NonGeoDataset):
             # Concat
             for mod, indices in self.rgb_indices.items():
                 if max(indices) > sample["image"].shape[1]:
-                    warnings.warn(f"RGB indices {indices}, but sample has only {sample['image'].shape[0]} channels.")
+                    warnings.warn(
+                        f"RGB indices {indices}, but sample has only {sample['image'].shape[0]} channels."
+                    )
                     continue
                 images[mod] = sample["image"][0, indices]
         else:
             for mod, indices in self.rgb_indices.items():
-                images[mod] = sample[mod][0, indices] if indices is not None else sample[mod][0]
+                images[mod] = (
+                    sample[mod][0, indices] if indices is not None else sample[mod][0]
+                )
 
         rows = len(images)
         num_images = len(self.timesteps)
@@ -200,29 +217,53 @@ class ImpactMeshDataset(NonGeoDataset):
         if target is not None:
             # Plot base image
             if num_images == 1:
-                plot_modality(self.modalities[0], images[self.modalities[0]], ax=ax[i][num_images])
+                plot_modality(
+                    self.modalities[0], images[self.modalities[0]], ax=ax[i][num_images]
+                )
             else:
-                plot_modality(self.modalities[0], images[self.modalities[0]][:, -1], ax=ax[i][num_images])
+                plot_modality(
+                    self.modalities[0],
+                    images[self.modalities[0]][:, -1],
+                    ax=ax[i][num_images],
+                )
 
-            ax[i][num_images].imshow(target.detach().cpu().numpy(),
-                                     cmap=red, vmin=-1, vmax=1, interpolation="nearest", alpha=0.7)
+            ax[i][num_images].imshow(
+                target.detach().cpu().numpy(),
+                cmap=red,
+                vmin=-1,
+                vmax=1,
+                interpolation="nearest",
+                alpha=0.7,
+            )
             ax[i][num_images].set_title("Target")
 
         if prediction is not None:
             ax_id = num_images + int(target is not None)
             # Plot base image
             if num_images == 1:
-                plot_modality(self.modalities[0], images[self.modalities[0]], ax=ax[i][ax_id])
+                plot_modality(
+                    self.modalities[0], images[self.modalities[0]], ax=ax[i][ax_id]
+                )
             else:
-                plot_modality(self.modalities[0], images[self.modalities[0]][:, -1], ax=ax[i][ax_id])
+                plot_modality(
+                    self.modalities[0],
+                    images[self.modalities[0]][:, -1],
+                    ax=ax[i][ax_id],
+                )
 
-            ax[i][ax_id].imshow(prediction.detach().cpu().numpy(),
-                                cmap=red, vmin=-1, vmax=1, interpolation="nearest", alpha=0.7)
+            ax[i][ax_id].imshow(
+                prediction.detach().cpu().numpy(),
+                cmap=red,
+                vmin=-1,
+                vmax=1,
+                interpolation="nearest",
+                alpha=0.7,
+            )
             ax[i][ax_id].set_title("Prediction")
 
         for i in range(rows):
             for j in range(cols):
-                ax[i][j].axis('off')
+                ax[i][j].axis("off")
 
         if suptitle:
             plt.suptitle(suptitle)
