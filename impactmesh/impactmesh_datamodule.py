@@ -14,80 +14,85 @@ datasets_stats = {
     "fire": {
         "means": {
             "S2L2A": [
-                801.325,
-                861.655,
-                991.636,
-                1019.702,
-                1366.43,
-                2000.191,
-                2255.338,
-                2354.884,
-                2481.838,
-                2747.908,
-                2185.777,
-                1495.209,
+                656.307,
+                726.342,
+                922.971,
+                1000.263,
+                1387.474,
+                2109.49,
+                2388.396,
+                2505.595,
+                2627.147,
+                2817.856,
+                2319.783,
+                1578.35,
             ],
-            "S1RTC": [-9.838, -15.465],
-            "DEM": [412.745],
+            "S1RTC": [-10.132, -15.81],
+            "DEM": [456.555],
         },
         "stds": {
             "S2L2A": [
-                1960.514,
-                1732.936,
-                1494.812,
-                1384.473,
-                1385.129,
-                1309.367,
-                1322.601,
-                1352.448,
-                1336.39,
-                2379.374,
-                1145.593,
-                991.566,
+                1396.137,
+                1280.788,
+                1170.872,
+                1167.83,
+                1176.989,
+                1146.266,
+                1186.601,
+                1216.544,
+                1200.161,
+                1910.06,
+                1048.237,
+                905.556,
             ],
-            "S1RTC": [3.505, 3.422],
-            "DEM": [354.58],
+            "S1RTC": [3.677, 3.682],
+            "DEM": [387.825],
         },
         "label_grep": "_annotation_wildfire.tif",
+        "num_classes": 2,
+        "class_weights": [0.217, 0.783],
     },
     "flood": {
         "means": {
             "S2L2A": [
-                1223.128,
-                1251.355,
-                1423.443,
-                1408.984,
-                1786.818,
-                2448.316,
-                2685.642,
-                2745.795,
-                2817.936,
-                3194.081,
-                1964.659,
-                1399.317,
+                1460.264,
+                1499.629,
+                1663.836,
+                1651.188,
+                2056.615,
+                2747.754,
+                2990.725,
+                3074.264,
+                3130.254,
+                3578.565,
+                2111.968,
+                1501.892,
             ],
-            "S1RTC": [-9.98, -15.968],
-            "DEM": [141.786],
+            "S1RTC": [-9.871, -15.993],
+            "DEM": [154.914],
         },
         "stds": {
             "S2L2A": [
-                2358.709,
-                2227.598,
-                2082.363,
-                2068.519,
-                2086.682,
-                2003.085,
-                2019.494,
-                2060.309,
-                2014.732,
-                2992.644,
-                1414.951,
-                1218.357,
+                2587.746,
+                2477.497,
+                2315.289,
+                2303.498,
+                2283.186,
+                2087.282,
+                2048.065,
+                2099.017,
+                2008.163,
+                3010.72,
+                1332.457,
+                1162.548,
             ],
-            "S1RTC": [4.24, 4.105],
-            "DEM": [189.363],
+            "S1RTC": [4.028, 3.899],
+            "DEM": [368.796],
         },
         "label_grep": "_annotation_flood.tif",
+        # Flood masks have three classes (plus -1 = ignore), unlike binary wildfire.
+        "num_classes": 3,
+        "class_weights": [0.044, 0.487, 0.469],
     },
 }
 
@@ -104,7 +109,7 @@ class ImpactMeshDataModule(NonGeoDataModule):
         stds: dict[str, list] = None,
         train_split: str = None,
         val_split: str = None,
-        test_split: str = None,
+        test_split: str | dict[str, str] = None,
         predict_split: str = None,
         modalities: list[str] = None,
         label_dir: str = "MASK",
@@ -132,6 +137,10 @@ class ImpactMeshDataModule(NonGeoDataModule):
             stds (dict[str, list], optional): Per-modality normalization stds. Defaults to dataset statistics.
             train_split, val_split, test_split, predict_split (str, optional): Split identifiers.
                 Otherwise, run all patches in data_root.
+                test_split may also be a dict {<name>: <split file>} to evaluate several test
+                splits in one run (e.g. the full test set plus the seen-events and held-out-events
+                subsets). They are tested in dict order, which must match the task's
+                test_dataloaders_names.
             modalities (list[str], optional): List of input modalities. Defaults to ["S2L2A", "S1RTC", "DEM"].
             label_dir (str): Directory name for labels. Default is "MASK".
             image_grep (dict[str, str], optional): Patterns for image file matching. Default to ImpactMesh pattern.
@@ -276,21 +285,33 @@ class ImpactMeshDataModule(NonGeoDataModule):
                 aug=self.aug,
             )
         if stage in ["test"]:
-            self.test_dataset = ImpactMeshDataset(
-                data_root=self.data_root,
-                split_file=self.test_split,
-                modalities=self.modalities,
-                label_dir=self.label_dir,
-                image_grep=self.image_grep,
-                label_grep=self.label_grep,
-                timesteps=self.timesteps,
-                concat_bands=self.concat_bands,
-                transform=self.test_transform,
-                no_data_value=self.no_data_value,
-                no_data_replace=self.no_data_replace,
-                rgb_indices=self.rgb_indices,
-                aug=self.aug,
+            # A dict test_split defines multiple test splits {<name>: <split file>},
+            # tested in dict order. A plain str is treated as a single "test" split.
+            test_splits = (
+                self.test_split
+                if isinstance(self.test_split, dict)
+                else {"test": self.test_split}
             )
+            self.test_datasets = [
+                ImpactMeshDataset(
+                    data_root=self.data_root,
+                    split_file=split_file,
+                    modalities=self.modalities,
+                    label_dir=self.label_dir,
+                    image_grep=self.image_grep,
+                    label_grep=self.label_grep,
+                    timesteps=self.timesteps,
+                    concat_bands=self.concat_bands,
+                    transform=self.test_transform,
+                    no_data_value=self.no_data_value,
+                    no_data_replace=self.no_data_replace,
+                    rgb_indices=self.rgb_indices,
+                    aug=self.aug,
+                )
+                for split_file in test_splits.values()
+            ]
+            # NonGeoDataModule's dataloader factory reads self.test_dataset
+            self.test_dataset = self.test_datasets[0]
         if stage in ["predict"]:
             if self.predict_data_root is None:
                 logging.warning(
@@ -311,3 +332,11 @@ class ImpactMeshDataModule(NonGeoDataModule):
                 rgb_indices=self.rgb_indices,
                 aug=self.aug,
             )
+
+    def test_dataloader(self):
+        """Return one DataLoader per test split (a list if there are several)."""
+        loaders = []
+        for dataset in self.test_datasets:
+            self.test_dataset = dataset  # _dataloader_factory reads self.test_dataset
+            loaders.append(self._dataloader_factory("test"))
+        return loaders if len(loaders) > 1 else loaders[0]

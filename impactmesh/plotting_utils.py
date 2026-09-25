@@ -4,10 +4,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import hex2color, LinearSegmentedColormap
 
-BLUE = [hex2color(hex) for hex in ["#000000", "#CCCCCC", "#003A6D"]]
+# Flood has three classes (no-water / permanent water / water) plus the ignore
+# value, so its colormap needs one more entry than the binary wildfire mask.
+BLUE = [hex2color(hex) for hex in ["#000000", "#CCCCCC", "#003A6D", "#0F62FE"]]
 RED = [hex2color(hex) for hex in ["#000000", "#CCCCCC", "#9F1853"]]
-blue = LinearSegmentedColormap.from_list('blue', BLUE, N=3)
+blue = LinearSegmentedColormap.from_list('blue', BLUE, N=4)
 red = LinearSegmentedColormap.from_list('red', RED, N=3)
+
+# Per-disaster colormap and max class index, keyed by disaster type.
+cmap = {
+    "flood": blue,
+    "fire": red,
+}
+vmax = {
+    "flood": 2,
+    "fire": 1,
+}
 
 
 def rgb_smooth_quantiles(array, tolerance=0.02, scaling=0.5, default=2000):
@@ -171,7 +183,7 @@ def dem_to_rgb(data, cmap='BrBG_r', buffer=10):
         return batch_dem_to_rgb(data, cmap=cmap, buffer=buffer)
 
     # Add 10m buffer to highlight flat areas
-    data_min, data_max = np.nanmin(data), np.nanmin(data)
+    data_min, data_max = np.nanmin(data), np.nanmax(data)
     data_min -= buffer
     data_max += buffer
     data = (data - data_min) / (data_max - data_min + 1e-6)
@@ -263,7 +275,12 @@ def plot_dem(data, ax=None, *args, **kwargs):
         ax.axis('off')
 
 
-def plot_mask(data, ax=None, num_classes=2, *args, **kwargs):
+def plot_mask(data, ax=None, num_classes=2, colormap=red, *args, **kwargs):
+    """Plot a label/prediction mask.
+
+    Pass ``colormap=blue`` (and ``num_classes=3``) for the flood subset, whose
+    masks have three classes; the default is the binary wildfire colormap.
+    """
     if isinstance(data, torch.Tensor):
         # to numpy
         data = data.clone().cpu().numpy()
@@ -275,11 +292,11 @@ def plot_mask(data, ax=None, num_classes=2, *args, **kwargs):
             data = data[0]
 
     if ax is None:
-        plt.imshow(data, vmin=-1, vmax=num_classes-1, cmap=red, interpolation='nearest')
+        plt.imshow(data, vmin=-1, vmax=num_classes-1, cmap=colormap, interpolation='nearest')
         plt.axis('off')
         plt.show()
     else:
-        ax.imshow(data, vmin=-1, vmax=num_classes-1, cmap=red, interpolation='nearest')
+        ax.imshow(data, vmin=-1, vmax=num_classes-1, cmap=colormap, interpolation='nearest')
         ax.axis('off')
 
 

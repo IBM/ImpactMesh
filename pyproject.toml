@@ -17,6 +17,7 @@ dependencies = [
     "terratorch>=1.1.1",
     "zarr==2.18.0",
     "numcodecs==0.15.1",
+    "webdataset",
 ]
 
 [tool.setuptools]

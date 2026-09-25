@@ -1,4 +1,13 @@
-# lightning.pytorch==2.1.1
+# TerraMind-tiny on ImpactMesh-Flood, reading WebDataset shards instead of
+# individual files. Identical model and optimizer to
+# terramind_v1_tiny_impactmesh_flood.yaml -- only the `data` section differs.
+#
+# Build the shards from the released per-modality tars first:
+#   python -m impactmesh.wds_create_shards \
+#       --hf-root data/hf/ImpactMesh-Flood --out data/shards --disaster flood
+#
+# Shards stream sequentially, so this is the faster option on shared or network
+# storage, and the only practical one for multi-node training.
 seed_everything: 42
 trainer:
   accelerator: auto
@@ -10,11 +19,11 @@ trainer:
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
-      project: ImpactMesh-Fire
-      name: TerraMind-Tiny_lr1e-4
+      project: ImpactMesh-Flood
+      name: TerraMind-Tiny_lr1e-4_wds
       config:
         modalities: S1-S2-DEM
-        dataset: IM-Fire
+        dataset: IM-Flood
 
   callbacks:
     - class_path: RichProgressBar
@@ -30,31 +39,35 @@ trainer:
         monitor: val/loss
         mode: min
         save_weights_only: true
-        dirpath: output/terramind_tiny_impactmesh_fire/1e-4
+        dirpath: output/terramind_tiny_impactmesh_flood_wds/1e-4
         filename: best_val_loss
   max_epochs: 50
   log_every_n_steps: 5
-  default_root_dir: output/terramind_tiny_impactmesh_fire/
+  default_root_dir: output/terramind_tiny_impactmesh_flood_wds/
 data:
-  class_path: impactmesh.impactmesh_datamodule.ImpactMeshDataModule
+  class_path: impactmesh.wds_impactmesh_datamodule.WdsImpactMeshDataModule
   init_args:
     batch_size: 16
     num_workers: 8
-    data_root: data/ImpactMesh-Fire/data
-    train_split: data/ImpactMesh-Fire/split/impactmesh_fire_train.txt
-    val_split: data/ImpactMesh-Fire/split/impactmesh_fire_val.txt
-    # The test set pools patches from events seen in training (different patches)
-    # with patches from fully held-out events. A dict runs each as its own test
-    # dataloader, in this order; the names must match test_dataloaders_names below.
-    test_split:
-      test: data/ImpactMesh-Fire/split/impactmesh_fire_test.txt
-      seen_events: data/ImpactMesh-Fire/split/impactmesh_fire_test_seen_events.txt
-      holdout: data/ImpactMesh-Fire/split/impactmesh_fire_test_holdout.txt
+    disaster: flood
+    # Shards are an infinite stream, so an epoch is defined by a sample count
+    # rather than by exhausting the dataset. This is the size of the train split.
+    train_epoch_size: 19448
+    train_urls: data/shards/ImpactMesh-Flood/train/train_shard_{000000..000127}.tar
+    val_urls: data/shards/ImpactMesh-Flood/val/val_shard_{000000..000007}.tar
+    # Seen-event patches are written to the first 8 test shards and held-out
+    # events to the last 8, so each subset is a shard range over one copy of the
+    # data. Order must match test_dataloaders_names below.
+    test_urls:
+      test: data/shards/ImpactMesh-Flood/test/test_shard_{000000..000015}.tar
+      seen_events: data/shards/ImpactMesh-Flood/test/test_shard_{000000..000007}.tar
+      holdout: data/shards/ImpactMesh-Flood/test/test_shard_{000008..000015}.tar
     timesteps: [0, 1, 2, 3]
     modalities:
-        - S2L2A
-        - S1RTC
-        - DEM
+      - S2L2A
+      - S1RTC
+      - DEM
+    concat_bands: False
     no_data_replace: 0
     train_transform:
       - class_path: terratorch.datasets.transforms.FlattenTemporalIntoChannels
@@ -63,15 +76,6 @@ data:
       - class_path: terratorch.datasets.transforms.UnflattenTemporalFromChannels
         init_args:
           n_timesteps: 4
-# Use pretraining stats with frozen encoder
-#    means:
-#      S2L2A: [ 1390.458, 1503.317, 1718.197, 1853.91, 2199.1, 2779.975, 2987.011, 3083.234, 3132.22, 3162.988, 2424.884, 1857.648 ]
-#      S1RTC: [ -10.93, -17.329 ]
-#      DEM: [ 670.665 ]
-#    stds:
-#      S2L2A: [ 2106.761, 2141.107, 2038.973, 2134.138, 2085.321, 1889.926, 1820.257, 1871.918, 1753.829, 1797.379, 1434.261, 1334.311 ]
-#      S1RTC: [ 4.391, 4.459 ]
-#      DEM: [ 951.272 ]
 
 model:
   class_path: terratorch.tasks.SemanticSegmentationTask
@@ -87,8 +91,7 @@ model:
 
       # Apply temporal wrapper (docs: https://terrastackai.github.io/terratorch/stable/guide/temporal_wrapper/)
       backbone_use_temporal: true
-      backbone_temporal_pooling: concat
-      backbone_temporal_n_timestamps: 4
+      backbone_temporal_pooling: mean
 
       necks:
         - name: SelectIndices
@@ -103,13 +106,13 @@ model:
 #      decoder_channels: [512, 256, 128, 64] # base
 
       head_dropout: 0.1
-      num_classes: 2
+      num_classes: 3
     loss: dice
     ignore_index: -1
     test_dataloaders_names: [test, seen_events, holdout]
     freeze_backbone: false
     freeze_decoder: false
-    class_weights: [0.217, 0.783]
+    class_weights: [0.044, 0.487, 0.469]
     # For prediction: overlap of 16 pixel on each side, 8 pixels dropped
     tiled_inference_parameters:
       crop: 256

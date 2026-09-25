@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Callable
 from torchgeo.datasets import NonGeoDataset
 from terratorch.datasets.transforms import MultimodalTransforms, MultimodalToTensor
-from .plotting_utils import plot_modality, red
+from .plotting_utils import plot_modality, cmap, vmax
 
 
 class ImpactMeshDataset(NonGeoDataset):
@@ -54,10 +54,12 @@ class ImpactMeshDataset(NonGeoDataset):
         self.concat_bands = concat_bands
         self.no_data_value = no_data_value
         self.no_data_replace = (
-            no_data_replace if no_data_replace is not None else np.nan
+            no_data_replace if no_data_replace is not None else 0.0
         )
         self.rgb_indices = rgb_indices
         self.aug = aug
+        # Used to pick the colormap / number of classes when plotting
+        self.subset = "flood" if "flood" in str(data_root).lower() else "fire"
 
         if split_file is not None:
             with open(split_file, "r") as f:
@@ -164,8 +166,12 @@ class ImpactMeshDataset(NonGeoDataset):
         if "mask" in output:
             output["mask"] = output["mask"].long()
 
-        if "DEM" in self.modalities:
-            # TerraTorch expects a tif file as input to copy the metadata. Only works with DEM
+            # TerraTorch expects a tif file as input to copy the metadata.
+            # Only works with mask or DEM.
+            output["filename"] = str(
+                self.label_dir / f"{patch_id}{self.label_grep}"
+            )
+        elif "DEM" in self.modalities:
             output["filename"] = str(
                 self.data_root["DEM"] / f"{patch_id}{self.image_grep['DEM']}"
             )
@@ -229,9 +235,9 @@ class ImpactMeshDataset(NonGeoDataset):
 
             ax[i][num_images].imshow(
                 target.detach().cpu().numpy(),
-                cmap=red,
+                cmap=cmap[self.subset],
                 vmin=-1,
-                vmax=1,
+                vmax=vmax[self.subset],
                 interpolation="nearest",
                 alpha=0.7,
             )
@@ -253,9 +259,9 @@ class ImpactMeshDataset(NonGeoDataset):
 
             ax[i][ax_id].imshow(
                 prediction.detach().cpu().numpy(),
-                cmap=red,
+                cmap=cmap[self.subset],
                 vmin=-1,
-                vmax=1,
+                vmax=vmax[self.subset],
                 interpolation="nearest",
                 alpha=0.7,
             )

@@ -1,4 +1,5 @@
 import os.path
+import re
 
 import torch
 import tqdm
@@ -39,7 +40,6 @@ task.datamodule.setup("predict")
 data_loader = task.datamodule.predict_dataloader()
 output_dir = Path(args.output_dir)
 output_dir.mkdir(parents=True, exist_ok=True)
-tif_dir = Path(task.datamodule.predict_data_root) / "DEM"
 
 # Inference wrapper for TerraTorch task model
 def model_forward(x, **kwargs):
@@ -50,8 +50,9 @@ print(f"Saving output to {output_dir}")
 
 for batch in tqdm.tqdm(data_loader):
     filename = batch["filename"][0]
-    print(filename)
-    out_file_name = output_dir / (os.path.basename(filename).rsplit('_DEM.tif')[0] + "_prediction.tif")
+    # filename is the mask or DEM tif the dataset used for georeferencing
+    patch_id = re.sub(r"_(DEM|annotation_\w+)\.tif$", "", os.path.basename(filename))
+    out_file_name = output_dir / (patch_id + "_prediction.tif")
     if not args.overwrite and out_file_name.exists():
         print(f"Skipping {out_file_name} ...")
 
@@ -72,7 +73,6 @@ for batch in tqdm.tqdm(data_loader):
     pred = pred.squeeze(0).argmax(dim=0).cpu().numpy()
 
     # Save image
-    print(out_file_name)
     mask, metadata = open_tiff(filename)
     if args.verbose:
         print(f"Saving output to {out_file_name}")

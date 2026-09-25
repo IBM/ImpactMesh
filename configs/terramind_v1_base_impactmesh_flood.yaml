@@ -43,7 +43,13 @@ data:
     data_root: data/ImpactMesh-Flood/data
     train_split: data/ImpactMesh-Flood/split/impactmesh_flood_train.txt
     val_split: data/ImpactMesh-Flood/split/impactmesh_flood_val.txt
-    test_split: data/ImpactMesh-Flood/split/impactmesh_flood_test.txt
+    # The test set pools patches from events seen in training (different patches)
+    # with patches from fully held-out events. A dict runs each as its own test
+    # dataloader, in this order; the names must match test_dataloaders_names below.
+    test_split:
+      test: data/ImpactMesh-Flood/split/impactmesh_flood_test.txt
+      seen_events: data/ImpactMesh-Flood/split/impactmesh_flood_test_seen_events.txt
+      holdout: data/ImpactMesh-Flood/split/impactmesh_flood_test_holdout.txt
     timesteps: [0, 1, 2, 3]
     modalities:
         - S2L2A
@@ -97,12 +103,13 @@ model:
       decoder_channels: [512, 256, 128, 64] # base
 
       head_dropout: 0.1
-      num_classes: 2
+      num_classes: 3
     loss: dice
     ignore_index: -1
+    test_dataloaders_names: [test, seen_events, holdout]
     freeze_backbone: false
     freeze_decoder: false
-    class_weights: [0.342, 1.316]
+    class_weights: [0.044, 0.487, 0.469]
     # For prediction: overlap of 16 pixel on each side, 8 pixels dropped
     tiled_inference_parameters:
       crop: 256

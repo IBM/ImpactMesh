@@ -41,9 +41,15 @@ data:
     batch_size: 16
     num_workers: 8
     data_root: data/ImpactMesh-Fire/data
-    train_split: data/ImpactMesh-Fire/split/impactmesh_wildfire_train.txt
-    val_split: data/ImpactMesh-Fire/split/impactmesh_wildfire_val.txt
-    test_split: data/ImpactMesh-Fire/split/impactmesh_wildfire_test.txt
+    train_split: data/ImpactMesh-Fire/split/impactmesh_fire_train.txt
+    val_split: data/ImpactMesh-Fire/split/impactmesh_fire_val.txt
+    # The test set pools patches from events seen in training (different patches)
+    # with patches from fully held-out events. A dict runs each as its own test
+    # dataloader, in this order; the names must match test_dataloaders_names below.
+    test_split:
+      test: data/ImpactMesh-Fire/split/impactmesh_fire_test.txt
+      seen_events: data/ImpactMesh-Fire/split/impactmesh_fire_test_seen_events.txt
+      holdout: data/ImpactMesh-Fire/split/impactmesh_fire_test_holdout.txt
     timesteps: [0, 1, 2, 3]
     modalities:
         - S2L2A
@@ -100,9 +106,10 @@ model:
       num_classes: 2
     loss: dice
     ignore_index: -1
+    test_dataloaders_names: [test, seen_events, holdout]
     freeze_backbone: false
     freeze_decoder: false
-    class_weights: [0.342, 1.316]
+    class_weights: [0.217, 0.783]
     # For prediction: overlap of 16 pixel on each side, 8 pixels dropped
     tiled_inference_parameters:
       crop: 256

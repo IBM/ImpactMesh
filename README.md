@@ -19,6 +19,10 @@ The following map gives an overview of events present in ImpactMesh:
   <img src="assets/events_world_light.png" alt="ImpactMesh events world map" width="800"/>
 </picture>
 
+The wildfire masks are binary (0 = unburnt, 1 = burnt). The flood masks have three
+classes (0 = no water, 1 = permanent water, 2 = flood water), so flood configs use
+`num_classes: 3`. Both use `-1` as the ignore value.
+
 This repository provides code to build the pytorch dataloader or directly fine-tune a model with [TerraTorch](https://terrastackai.github.io/terratorch/stable/).
 
 ## Setup
@@ -40,6 +44,20 @@ pip install -e .
 
 ImpactMesh uses Zarr Version 2.
 
+## Download
+
+Each split is released as one tar per modality. Download a subset and extract the tars
+into the flat directory the configs expect:
+
+```shell
+hf download ibm-esa-geospatial/ImpactMesh-Flood --repo-type dataset --local-dir data/ImpactMesh-Flood
+
+mkdir -p data/ImpactMesh-Flood/data
+for f in data/ImpactMesh-Flood/*/*.tar; do
+    tar -xf "$f" -C data/ImpactMesh-Flood/data
+done
+```
+
 ## Fine-tuning
 
 Run training using on of the configs provided in [configs/](configs).
@@ -59,6 +77,35 @@ terratorch predict -c configs/terramind_v1_tiny_impactmesh_fire.yaml --ckpt path
 # TerraTorch automatically uses a tiled inference. It might still lead to OOM errors. In that case, you can use:
 python impactmesh/run_inference.py -c configs/terramind_v1_tiny_impactmesh_fire.yaml --ckpt path/to/ckeckpoint.pt --output_dir output/impactmesh_fire_predictions
 ```
+
+## WebDataset
+
+Reading individual files means several random reads per sample, which is slow on shared
+or network filesystems. `wds_create_shards.py` repackages the released per-modality tars
+into [WebDataset](https://github.com/webdataset/webdataset) shards that hold all
+modalities of a patch in one contiguous record, so they stream sequentially:
+
+```shell
+hf download ibm-esa-geospatial/ImpactMesh-Flood --repo-type dataset \
+    --local-dir data/hf/ImpactMesh-Flood
+
+python -m impactmesh.wds_create_shards \
+    --hf-root data/hf/ImpactMesh-Flood --out data/shards --disaster flood
+```
+
+This streams tar-to-tar, holding one sample in memory, so it does not need the dataset
+extracted first. Seen-event patches are written to the first test shards and held-out
+events to the later ones, so each test subset is addressed as a shard range over a
+single copy of the data.
+
+Use the `WdsImpactMeshDataModule` for training with shards, see config:
+
+```shell
+terratorch fit --config configs/terramind_v1_tiny_impactmesh_flood_wds.yaml
+```
+
+Shards are an infinite stream, so an epoch is defined by `train_epoch_size` (the number
+of samples in the train split) rather than by exhausting the dataset.
 
 ## Citation
 
